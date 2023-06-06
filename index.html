@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Nearest Locations</title>
+    <style>
+        body,
+        html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+
+        #map {
+            height: 100%;
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
+            opacity: .5;
+        }
+
+        .marker {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: #3366ff;
+            border: 2px solid #fff;
+        }
+
+        .location {
+            display: flex;
+            flex-direction: column;
+            gap: .5em;
+            margin: 1rem;
+        }
+        
+        .location-name {
+            /* font-weight: bold; */
+            padding: 1rem .8rem;
+            border-radius: 15px;
+            background-color: #ffffff97;
+            box-shadow: 10px 12px 49px 3px rgba(214,214,214,0.57);
+        }
+
+        .location-distance {
+            color: #666;
+        }
+
+        #content {
+            padding: 20px;
+        }
+
+        .error-message {
+            color: red;
+            font-weight: bold;
+        }
+        @media screen and (max-width: 500px) {
+            #content {
+                padding: 10px;
+            }
+
+
+        }
+    </style>
+</head>
+
+<body>
+    <section class="datas">
+        <h1>Nearest Locations</h1>
+        <p id="currentCity"></p>
+
+        <div id="map"></div>
+        <div id="locationList"></div>
+    </section>
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.3.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.3.1/mapbox-gl.css" rel="stylesheet" />
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoibW5hYmVlbDQ0NzciLCJhIjoiY2xpZ2Uwc3EwMGVpeDNkbndmdGV1aXc1cyJ9.9SwWDVi1jwmzmapVgHwHDw';
+
+        function haversineDistance(lon1, lat1, lon2, lat2) {
+            const earthRadius = 6371; // in kilometers
+
+            const toRadians = (degrees) => (degrees * Math.PI) / 180;
+
+            const deltaLat = toRadians(lat2 - lat1);
+            const deltaLon = toRadians(lon2 - lon1);
+
+            const a =
+                Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+                Math.cos(toRadians(lat1)) *
+                Math.cos(toRadians(lat2)) *
+                Math.sin(deltaLon / 2) *
+                Math.sin(deltaLon / 2);
+
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            const distance = earthRadius * c;
+
+            return distance * 1000;
+        }
+
+        function findNearestLocations(data, centerLat, centerLon) {
+            const nearestLocations = [];
+
+            for (let i = 0; i < data.length; i++) {
+                const location = data[i];
+                const lat = location.latitude;
+                const lon = location.longitude;
+
+                const distance = haversineDistance(centerLat, centerLon, lat, lon);
+
+                location.distance = distance;
+
+                nearestLocations.push(location);
+            }
+
+            nearestLocations.sort((a, b) => a.distance - b.distance);
+
+            return nearestLocations;
+        }
+
+        function displayNearestLocations(centerLat, centerLon) {
+            const data = [
+                { name: "Home", latitude: 11.1848505, longitude: 75.8435999 },
+                { name: "Grand Bakes", latitude: 11.1838543, longitude: 75.8435412 },
+                { name: "Grand Hotel", latitude: 11.1828665, longitude: 75.8458570 },
+                { name: "Ramanattukara", latitude: 11.177580, longitude: 75.864940 },
+                { name: "Kozhikode", latitude: 11.2551448, longitude: 75.7697557}
+            ];
+
+            const nearestLocations = findNearestLocations(data, centerLat, centerLon);
+
+            const locationElement = document.createElement("div");
+            locationElement.className = "location";
+            const mapContainer = document.getElementById("map");
+
+            // Clear previous results
+            mapContainer.innerHTML = "";
+
+            if (nearestLocations.length === 0) {
+                const row = table.insertRow();
+                const noResultsCell = row.insertCell(0);
+                noResultsCell.colSpan = 2;
+                noResultsCell.textContent = "No locations found.";
+            } else {
+                const map = new mapboxgl.Map({
+                    container: 'map',
+                    style: 'mapbox://styles/mapbox/streets-v11',
+                    center: [centerLon, centerLat],
+                    zoom: 15,
+                    interactive: false,
+                    dragPan: false
+                });
+
+
+                map.on('load', function () {
+                    // Add markers for each location
+                    nearestLocations.forEach(function (location) {
+                        const marker = new mapboxgl.Marker()
+                            .setLngLat([location.longitude, location.latitude])
+                            .addTo(map);
+
+                        // Add popup with location name
+                        const popup = new mapboxgl.Popup({ offset: 25 })
+                            .setText(location.name);
+
+                        marker.setPopup(popup);
+                    });
+
+                    // Add marker for current location
+                    const currentLocationMarker = new mapboxgl.Marker({ color: 'red' })
+                        .setLngLat([centerLon, centerLat])
+                        .addTo(map);
+
+                    // Add popup with current location name
+                    const currentLocationPopup = new mapboxgl.Popup({ offset: 25 })
+                        .setText("Current Location");
+
+                    currentLocationMarker.setPopup(currentLocationPopup);
+                });
+
+                for (let i = 0; i < nearestLocations.length; i++) {
+                    const location = nearestLocations[i];
+                    const name = location.name;
+                    const distance = location.distance;
+
+                    let distanceText;
+                    if (distance >= 1000) {
+                        const distanceInKm = distance / 1000;
+                        distanceText = distanceInKm.toFixed(1) + " km";
+                    } else {
+                        distanceText = distance.toFixed(0) + " ms";
+                    }
+
+                    const locationName = document.createElement("span");
+                    locationName.className = "location-name";
+                    locationName.textContent = `${name} (${distanceText})`;
+
+                    locationElement.appendChild(locationName);
+
+                    locationList.appendChild(locationElement);
+                }
+            }
+        }
+
+        function getCurrentPosition() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                    const centerLat = position.coords.latitude;
+                    const centerLon = position.coords.longitude;
+                    displayNearestLocations(centerLat, centerLon);
+                    displayCurrentLocationCity(centerLat, centerLon);
+                },
+                function (error) {
+                    if (error.code === error.PERMISSION_DENIED) {
+                        console.error('Error: User denied geolocation permission.');
+                        handleLocationError();
+                    } else {
+                        console.error('Error getting current position:', error.message);
+                        handleLocationError();
+                    }
+                    // Fallback to a default location
+                    const centerLat = 11.1848505;
+                    const centerLon = 75.8435999;
+                    displayNearestLocations(centerLat, centerLon);
+                }
+            );
+        } else {
+            console.error('Geolocation is not supported by this browser.');
+            handleLocationError();
+            // Fallback to a default location
+            const centerLat = 11.2551448;
+            const centerLon = 75.7697557;
+            displayNearestLocations(centerLat, centerLon);
+        }
+    }
+
+        function handleLocationError() {
+            const locationList = document.getElementById("locationList");
+            const errorMessage = document.createElement("div");
+            errorMessage.className = "error-message";
+            errorMessage.textContent = "Error: Could not retrieve current location.";
+            locationList.appendChild(errorMessage);
+        }
+
+        function displayCurrentLocationCity(lat, lon) {
+            const geocoderUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lon},${lat}.json?access_token=${mapboxgl.accessToken}`;
+
+            fetch(geocoderUrl)
+                .then(response => response.json())
+                .then(data => {
+                    const features = data.features;
+                    if (features.length > 0) {
+                        const city = features[0].context.find(context => context.id.includes('place')).text;
+                        const currentLocationCity = document.getElementById("currentCity");
+                        currentLocationCity.innerHTML = city;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching current location city:', error);
+                });
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            // Initial display on page load
+            getCurrentPosition();
+        });
+    </script>
+</body>
+
+</html>

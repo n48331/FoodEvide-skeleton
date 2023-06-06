@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Nearest Locations</title>
+    <style>
+        #map {
+            height: 400px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>Nearest Locations</h1>
+
+    <div id="map"></div>
+
+    <table id="locationTable">
+        <tr>
+            <th>Name</th>
+            <th>Distance</th>
+        </tr>
+        <tr>
+            <td id="currentLocationCell" colspan="2"></td>
+        </tr>
+    </table>
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.3.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.3.1/mapbox-gl.css" rel="stylesheet" />
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoibW5hYmVlbDQ0NzciLCJhIjoiY2xpZ2Uwc3EwMGVpeDNkbndmdGV1aXc1cyJ9.9SwWDVi1jwmzmapVgHwHDw';
+        
+
+        function haversineDistance(lon1, lat1, lon2, lat2) {
+            const earthRadius = 6371; // in kilometers
+
+            const toRadians = (degrees) => (degrees * Math.PI) / 180;
+
+            const deltaLat = toRadians(lat2 - lat1);
+            const deltaLon = toRadians(lon2 - lon1);
+
+            const a =
+                Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+                Math.cos(toRadians(lat1)) *
+                Math.cos(toRadians(lat2)) *
+                Math.sin(deltaLon / 2) *
+                Math.sin(deltaLon / 2);
+
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            const distance = earthRadius * c;
+
+            return distance*1000;
+        }
+
+        function findNearestLocations(data, centerLat, centerLon) {
+            const nearestLocations = [];
+
+            for (let i = 0; i < data.length; i++) {
+                const location = data[i];
+                const lat = location.latitude;
+                const lon = location.longitude;
+
+                const distance = haversineDistance(centerLat, centerLon, lat, lon);
+
+                location.distance = distance;
+
+                nearestLocations.push(location);
+            }
+
+            nearestLocations.sort((a, b) => a.distance - b.distance);
+
+            return nearestLocations;
+        }
+
+        function displayNearestLocations(centerLat, centerLon) {
+            const data = [
+                { name: "Home", latitude: 11.1848505, longitude: 75.8435999 },
+                { name: "Grand Bakes", latitude: 11.1838543, longitude: 75.8435412 },
+                { name: "Grand Hotel", latitude: 11.1828665, longitude: 75.8458570 },
+                { name: "Ramanattukara", latitude: 11.177580, longitude: 75.864940 }
+            ];
+
+            const nearestLocations = findNearestLocations(data, centerLat, centerLon);
+
+            const table = document.getElementById("locationTable");
+            const mapContainer = document.getElementById("map");
+
+            // Clear previous results
+            table.innerHTML = "<tr><th>Name</th><th>Distance</th></tr>";
+            mapContainer.innerHTML = "";
+
+            if (nearestLocations.length === 0) {
+                const row = table.insertRow();
+                const noResultsCell = row.insertCell(0);
+                noResultsCell.colSpan = 2;
+                noResultsCell.textContent = "No locations found.";
+            } else {
+                const map = new mapboxgl.Map({
+                    container: 'map',
+                    style: 'mapbox://styles/mapbox/streets-v11',
+                    center: [centerLon, centerLat],
+                    zoom: 12
+                });
+
+                map.addControl(new mapboxgl.NavigationControl());
+
+                map.on('load', function () {
+                    // Add markers for each location
+                    nearestLocations.forEach(function (location) {
+                        const marker = new mapboxgl.Marker()
+                            .setLngLat([location.longitude, location.latitude])
+                            .addTo(map);
+
+                        // Add popup with location name
+                        const popup = new mapboxgl.Popup({ offset: 25 })
+                            .setText(location.name);
+
+                        marker.setPopup(popup);
+                    });
+
+                    // Add marker for current location
+                    const currentLocationMarker = new mapboxgl.Marker({ color: 'red' })
+                        .setLngLat([centerLon, centerLat])
+                        .addTo(map);
+
+                    // Add popup with current location name
+                    const currentLocationPopup = new mapboxgl.Popup({ offset: 25 })
+                        .setText("Current Location");
+
+                    currentLocationMarker.setPopup(currentLocationPopup);
+                });
+
+                for (let i = 0; i < nearestLocations.length; i++) {
+                    const location = nearestLocations[i];
+                    const name = location.name;
+                    const distance = location.distance;
+
+                    let distanceText;
+                    if (distance >= 1000) {
+                        const distanceInKm = distance / 1000;
+                        distanceText = distanceInKm.toFixed(1) + " km";
+                    } else {
+                        distanceText = distance.toFixed(0) + " meters";
+                    }
+
+                    const row = table.insertRow();
+                    const nameCell = row.insertCell(0);
+                    const distanceCell = row.insertCell(1);
+
+                    nameCell.textContent = name;
+                    distanceCell.textContent = distanceText;
+                }
+            }
+        }
+
+        function getCurrentPosition() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function (position) {
+                        const centerLat = position.coords.latitude;
+                        const centerLon = position.coords.longitude;
+                        displayNearestLocations(centerLat, centerLon);
+                        displayCurrentLocationCity(centerLat, centerLon);
+                    },
+                    function (error) {
+                        console.error('Error getting current position:', error);
+                        handleLocationError();
+                        // Fallback to a default location
+                        const centerLat = 11.1848505;
+                        const centerLon = 75.8435999;
+                        displayNearestLocations(centerLat, centerLon);
+                    }
+                );
+            } else {
+                console.error('Geolocation is not supported by this browser.');
+                handleLocationError();
+                // Fallback to a default location
+                const centerLat = 11.1848505;
+                const centerLon = 75.8435999;
+                displayNearestLocations(centerLat, centerLon);
+            }
+        }
+
+        function handleLocationError() {
+            const table = document.getElementById("locationTable");
+            const row = table.insertRow();
+            const errorCell = row.insertCell(0);
+            errorCell.colSpan = 2;
+            errorCell.textContent = "Error: Could not retrieve current location.";
+        }
+                function displayCurrentLocationCity(lat, lon) {
+            const geocoderUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lon},${lat}.json?access_token=${mapboxgl.accessToken}`;
+
+            fetch(geocoderUrl)
+                .then(response => response.json())
+                .then(data => {
+                    const features = data.features;
+                    if (features.length > 0) {
+                        const city = features[0].text;
+                        const currentLocationCell = document.getElementById("currentLocationCell");
+                        currentLocationCell.textContent = city;
+                        console.log(city);
+                    
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching current location city:', error);
+                });
+        }
+
+        // Initial display on page load
+        getCurrentPosition();
+    </script>
+</body>
+</html>
