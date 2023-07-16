@@ -35,6 +35,23 @@ main {
     margin-top: .5rem;
 }
 
+
+.hero>h1 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: .5rem 0;
+    font-family: 'Meow Script', cursive;
+    font-weight: 400;
+    font-size: 44px;
+    text-align: center;
+}
+
+hr{
+    width: 100%;
+    background-color: var(--black);
+    height: .5px;
+}
 .banner {
     display: flex;
     align-items: center;
